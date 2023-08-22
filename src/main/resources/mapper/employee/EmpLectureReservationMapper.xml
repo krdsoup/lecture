@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="dsoup.reservation.lecture.employee.reservation.mapper.EmpLectureReservationMapper">
+	
+	<select id="selectLectureList" parameterType="EmpLectureReqVo" resultType="EmpLectureVo">
+		select
+			A.*
+			, lh.lecture_hall_name
+			, lrA.reservationCount
+			<choose>
+				<when test="employeeId != null and employeeId != ''">
+				, lrB.reservationYn
+				</when>
+				<otherwise>
+				, 0 as reservationYn
+				</otherwise>
+			</choose>
+		from (
+			select
+				l.lecture_id
+				, l.lecture_hall_id
+				, l.lecturer_name
+				, l.lecture_title
+				, l.lecture_contents
+				, l.lecture_start_time
+				, l.lecture_end_time
+				, l.lecture_seats_max
+			from lecture l
+			where l.lecture_start_time between date_add(now(), interval -1 day) 
+				and date_add(now(), interval 1 week) 
+			and l.use_yn = 1
+			<if test="lecturerName != null and lecturerName != ''">
+				and l.lecturer_name = #{lecturerName}
+			</if>
+			<if test="lectureTitle != null and lectureTitle != ''">
+				and l.lecture_title = #{lectureTitle}
+			</if>
+			<if test="lectureContents != null and lectureContents != ''">
+				and l.lecture_contents = #{lectureContents}
+			</if>
+			<if test="lectureStartTime != null and lectureStartTime != ''">
+				and l.lecture_start_time >= #{lectureStartTime}
+			</if>
+			<if test="lectureEndTime != null and lectureEndTime != ''">
+				and l.lecture_end_time <![CDATA[<=]]> #{lectureEndTime}
+			</if>
+			order by l.lecture_start_time
+			<if test="page > 0 and size > 0">
+				limit #{size}
+				offset #{start}
+			</if>
+		) A
+		left join lecture_hall lh
+		on A.lecture_hall_id = lh.lecture_hall_id
+		and lh.use_yn = 1
+		left join lateral (
+			select lecture_id, count(*) as reservationCount
+			from lecture_registration
+			where lecture_id = A.lecture_id
+			and use_yn = 1
+		) lrA
+		on A.lecture_id = lrA.lecture_id
+		<if test="employeeId != null and employeeId != ''">
+		left join lateral (
+			select lecture_id, 1 as reservationYn
+			from lecture_registration
+			where lecture_id = A.lecture_id
+			and employee_id = #{employeeId}
+			and use_yn = 1
+		) lrB
+		on A.lecture_id = lrB.lecture_id
+		</if>
+		order by A.lecture_start_time
+	</select>
+	
+	<select id="selectLectureListCount" parameterType="EmpLectureReqVo" resultType="Integer">
+		select
+			count(*)
+		from lecture l
+		where l.lecture_start_time between date_add(now(), interval -1 day) 
+			and date_add(now(), interval 1 week) 
+		and l.use_yn = 1
+		<if test="lecturerName != null and lecturerName != ''">
+			and l.lecturer_name = #{lecturerName}
+		</if>
+		<if test="lectureTitle != null and lectureTitle != ''">
+			and l.lecture_title = #{lectureTitle}
+		</if>
+		<if test="lectureContents != null and lectureContents != ''">
+			and l.lecture_contents = #{lectureContents}
+		</if>
+		<if test="lectureStartTime != null and lectureStartTime != ''">
+			and l.lecture_start_time >= #{lectureStartTime}
+		</if>
+		<if test="lectureEndTime != null and lectureEndTime != ''">
+			and l.lecture_end_time <![CDATA[<=]]> #{lectureEndTime}
+		</if>
+	</select>
+	
+	<select id="selectLectureReservationYn" parameterType="EmpLectureRegistrationReqVo" resultType="Integer">
+		select
+			count(*)
+		from lecture_registration lr
+		where lr.lecture_id = #{lectureId}
+		and lr.employee_id = #{employeeId}
+		and lr.use_yn = 1
+	</select>
+	
+	<insert id="insertLectureReservation" parameterType="EmpLectureRegistrationReqVo">
+		insert into lecture_registration (
+			lecture_id
+			, employee_id
+		)
+		values (
+			#{lectureId}
+			, #{employeeId}
+		) on duplicate key update
+			create_time = now()
+			, use_yn = 1
+	</insert>
+	
+	<select id="selectLectureReservationList" parameterType="EmpLectureRegistrationReqVo" resultType="EmpLectureVo">
+		select
+			A.*
+			, lh.lecture_hall_name
+			, lrA.reservationCount
+		from (
+			select
+				l.lecture_id
+				, l.lecture_hall_id
+				, l.lecturer_name
+				, l.lecture_title
+				, l.lecture_contents
+				, l.lecture_start_time
+				, l.lecture_end_time
+				, l.lecture_seats_max
+			from lecture l
+			inner join lecture_registration lr
+			on l.lecture_id = lr.lecture_id
+			and lr.use_yn = 1
+			inner join employee e
+			on lr.employee_id = e.employee_id
+			and lr.use_yn = 1
+			where e.employee_number = #{employeeNumber}
+			and l.use_yn = 1
+			order by l.lecture_start_time
+			<if test="page > 0 and size > 0">
+				limit #{size}
+				offset #{start}
+			</if>
+		) A
+		left join lecture_hall lh
+		on A.lecture_hall_id = lh.lecture_hall_id
+		and lh.use_yn = 1
+		left join lateral (
+			select lecture_id, count(*) as reservationCount
+			from lecture_registration
+			where lecture_id = A.lecture_id
+			and use_yn = 1
+		) lrA
+		on A.lecture_id = lrA.lecture_id
+		order by A.lecture_start_time
+	</select>
+	
+	<select id="selectLectureReservationListCount" parameterType="EmpLectureRegistrationReqVo" resultType="Integer">
+		select
+			count(*)
+		from lecture l
+		inner join lecture_registration lr
+		on l.lecture_id = lr.lecture_id
+		and lr.use_yn = 1
+		inner join employee e
+		on lr.employee_id = e.employee_id
+		and lr.use_yn = 1
+		where e.employee_number = #{employeeNumber}
+		and l.use_yn = 1
+	</select>
+	
+	<update id="cancelLectureReservation" parameterType="EmpLectureRegistrationReqVo">
+		update lecture_registration set
+			use_yn = 0
+		where lecture_id = #{lectureId}
+		and employee_id = #{employeeId}
+	</update>
+	
+	<select id="selectPopularLectureList" parameterType="PagingVo" resultType="EmpLectureVo">
+		select
+			A.*
+			, lh.lecture_hall_name
+			<choose>
+				<when test="employeeId != null and employeeId != ''">
+				, lrB.reservationYn
+				</when>
+				<otherwise>
+				, 0 as reservationYn
+				</otherwise>
+			</choose>
+		from (
+			select
+				l.lecture_id
+				, l.lecture_hall_id
+				, l.lecturer_name
+				, l.lecture_title
+				, l.lecture_contents
+				, l.lecture_start_time
+				, l.lecture_end_time
+				, l.lecture_seats_max
+				, lr.reservationCount
+			from lecture l
+			left join (
+				select lecture_id, count(*) as reservationCount
+				from lecture_registration
+				where create_time between date_add(now(), interval -3 day) and now()
+				and use_yn = 1
+			) lr
+			on l.lecture_id = lr.lecture_id
+			where l.lecture_start_time between date_add(now(), interval -1 day) 
+				and date_add(now(), interval 1 week) 
+			and l.use_yn = 1
+			order by lr.reservationCount desc
+			<if test="page > 0 and size > 0">
+				limit #{size}
+				offset #{start}
+			</if>
+		) A
+		left join lecture_hall lh
+		on A.lecture_hall_id = lh.lecture_hall_id
+		and lh.use_yn = 1
+		<if test="employeeId != null and employeeId != ''">
+		left join lateral (
+			select lecture_id, 1 as reservationYn
+			from lecture_registration
+			where lecture_id = A.lecture_id
+			and employee_id = #{employeeId}
+			and use_yn = 1
+		) lrB
+		on A.lecture_id = lrB.lecture_id
+		</if>
+		order by A.reservationCount
+	</select>
+	
+	<select id="selectPopularLectureListCount" parameterType="PagingVo" resultType="Integer">
+		select
+			count(*)
+		from lecture l
+		where l.lecture_start_time between date_add(now(), interval -1 day) 
+			and date_add(now(), interval 1 week)
+		and l.use_yn = 1
+	</select>
+	
+</mapper>
